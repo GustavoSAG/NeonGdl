@@ -1,0 +1,160 @@
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Neón Fusión GDL</title>
+  <link rel="manifest" href="manifest.json">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('service-worker.js');
+    }
+  </script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <style>
+    body { margin: 0; font-family: 'Inter', sans-serif; background: #fff; color: #1a1a1a; }
+    header { background: #30C97D; color: white; padding: 1rem; text-align: center; font-size: 1.4rem; font-weight: 600; }
+    .welcome { text-align: center; font-size: 1rem; color: #555; margin: 0.5rem 0; }
+    .container { padding: 1.5rem; display: flex; flex-direction: column; align-items: center; }
+    .card { background: #f5f5f5; border-radius: 12px; padding: 1.5rem; margin: 1rem 0; width: 100%; max-width: 600px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
+    button { padding: 0.8rem 1.5rem; font-size: 1rem; border: none; border-radius: 8px; background: #30C97D; color: white; margin: 0.5rem; cursor: pointer; }
+    button:hover { background: #28b16d; }
+    table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+    th, td { border: 1px solid #ccc; padding: 0.5rem; text-align: center; }
+    input, select { padding: 0.5rem; margin: 0.3rem; width: calc(100% - 1rem); max-width: 500px; }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+<header>Neón Fusión GDL</header>
+<div class="welcome">Bienvenido, Gustavo</div>
+<div class="container">
+
+  <div class="card">
+    <h2>Importar desde Excel</h2>
+    <input type="file" id="inputExcel" accept=".xlsx" />
+  </div>
+
+  <div class="card">
+    <h2>Registrar Venta</h2>
+    <input type="date" id="fechaVenta">
+    <input type="text" id="clienteVenta" placeholder="Cliente">
+    <input type="text" id="productoVenta" placeholder="Producto">
+    <input type="text" id="medidaVenta" placeholder="Medida">
+    <input type="text" id="luzVenta" placeholder="Luz (Sí/No)">
+    <input type="text" id="resinaVenta" placeholder="Resina (Sí/No)">
+    <input type="number" id="costoVenta" placeholder="Costo">
+    <input type="number" id="cantidadVenta" placeholder="Cantidad">
+    <button onclick="agregarVenta()">Guardar Venta</button>
+  </div>
+
+  <div class="card">
+    <h2>Registrar Gasto</h2>
+    <select id="tipoGasto">
+      <option value="Envío">Envío</option>
+      <option value="Insumo">Insumo</option>
+      <option value="Impresiones">Impresiones</option>
+      <option value="Luces">Luces</option>
+    </select>
+    <input type="number" id="totalGasto" placeholder="Total ($)">
+    <button onclick="agregarGasto()">Guardar Gasto</button>
+  </div>
+
+  <div class="card" id="tabla-ventas">
+    <h2>Ventas</h2>
+    <table><thead><tr><th>Fecha</th><th>Cliente</th><th>Producto</th><th>Medida</th><th>Luz</th><th>Resina</th><th>Costo</th><th>Cantidad</th><th>Total</th><th>Eliminar</th></tr></thead><tbody></tbody></table>
+    <button onclick="exportarCSV('tabla-ventas')">Exportar a Excel</button>
+    <button onclick="exportarPDF('tabla-ventas')">Exportar a PDF</button>
+  </div>
+
+  <div class="card" id="tabla-gastos">
+    <h2>Gastos</h2>
+    <table><thead><tr><th>Tipo</th><th>Total</th><th>Eliminar</th></tr></thead><tbody></tbody></table>
+    <button onclick="exportarCSV('tabla-gastos')">Exportar a Excel</button>
+    <button onclick="exportarPDF('tabla-gastos')">Exportar a PDF</button>
+  </div>
+
+</div>
+<script>
+function agregarVenta() {
+  const f = fechaVenta.value, c = clienteVenta.value, p = productoVenta.value, m = medidaVenta.value;
+  const l = luzVenta.value, r = resinaVenta.value;
+  const cost = parseFloat(costoVenta.value), cant = parseFloat(cantidadVenta.value);
+  const total = cost * cant;
+  const row = `<tr><td>${f}</td><td>${c}</td><td>${p}</td><td>${m}</td><td>${l}</td><td>${r}</td><td>${cost}</td><td>${cant}</td><td>${total}</td>
+  <td><button onclick="eliminarFila(this, 'tabla-ventas')">Eliminar</button></td></tr>`;
+  tablaVentas.querySelector("tbody").insertAdjacentHTML("beforeend", row);
+  guardarTabla("tabla-ventas");
+}
+function agregarGasto() {
+  const tipo = tipoGasto.value, total = totalGasto.value;
+  const row = `<tr><td>${tipo}</td><td>$${total}</td><td><button onclick="eliminarFila(this, 'tabla-gastos')">Eliminar</button></td></tr>`;
+  tablaGastos.querySelector("tbody").insertAdjacentHTML("beforeend", row);
+  guardarTabla("tabla-gastos");
+}
+function eliminarFila(btn, id) {
+  btn.closest("tr").remove(); guardarTabla(id);
+}
+function guardarTabla(id) {
+  const rows = Array.from(document.querySelectorAll(`#${id} tbody tr`)).map(tr =>
+    Array.from(tr.querySelectorAll("td")).slice(0, -1).map(td => td.textContent));
+  localStorage.setItem(id, JSON.stringify(rows));
+}
+function cargarTablas() {
+  ["tabla-ventas","tabla-gastos"].forEach(id => {
+    const data = JSON.parse(localStorage.getItem(id) || "[]");
+    data.forEach(row => {
+      const fila = "<tr>" + row.map(c => `<td>${c}</td>`).join("") +
+        `<td><button onclick="eliminarFila(this, '${id}')">Eliminar</button></td></tr>`;
+      document.querySelector(`#${id} tbody`).insertAdjacentHTML("beforeend", fila);
+    });
+  });
+}
+function exportarCSV(id) {
+  const rows = Array.from(document.querySelectorAll(`#${id} table tr`)).map(r =>
+    Array.from(r.querySelectorAll("th,td")).map(td => `"${td.innerText}"`).join(","));
+  const blob = new Blob([rows.join("\n")], { type: "text/csv" });
+  const link = document.createElement("a"); link.href = URL.createObjectURL(blob);
+  link.download = id + ".csv"; document.body.appendChild(link); link.click(); link.remove();
+}
+function exportarPDF(id) {
+  html2canvas(document.querySelector(`#${id}`)).then(canvas => {
+    const img = canvas.toDataURL("image/png");
+    const pdf = new jspdf.jsPDF(); const w = pdf.internal.pageSize.getWidth();
+    const h = canvas.height * w / canvas.width;
+    pdf.addImage(img, "PNG", 0, 10, w, h); pdf.save(id + ".pdf");
+  });
+}
+inputExcel.addEventListener("change", function (e) {
+  const file = e.target.files[0], reader = new FileReader();
+  reader.onload = evt => {
+    const data = new Uint8Array(evt.target.result);
+    const wb = XLSX.read(data, { type: "array" });
+    const json = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1 });
+    let ventaStart = json.findIndex(r => r.includes("Fecha") && r.includes("Cliente"));
+    let gastoStart = json.findIndex(r => r.includes("Concepto") && r.includes("Total"));
+    for (let i = ventaStart + 1; i < gastoStart; i++) {
+      const r = json[i];
+      if (!r || r.length < 9) continue;
+      const html = `<tr><td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td><td>${r[3]}</td><td>${r[4]}</td><td>${r[5]}</td><td>${r[6]}</td><td>${r[7]}</td><td>${r[8]}</td>
+      <td><button onclick="eliminarFila(this, 'tabla-ventas')">Eliminar</button></td></tr>`;
+      tablaVentas.querySelector("tbody").insertAdjacentHTML("beforeend", html);
+    }
+    for (let i = gastoStart + 1; i < json.length; i++) {
+      const r = json[i];
+      if (!r || r.length < 2) continue;
+      const html = `<tr><td>${r[0]}</td><td>${r[1]}</td><td><button onclick="eliminarFila(this, 'tabla-gastos')">Eliminar</button></td></tr>`;
+      tablaGastos.querySelector("tbody").insertAdjacentHTML("beforeend", html);
+    }
+    guardarTabla("tabla-ventas"); guardarTabla("tabla-gastos");
+  };
+  reader.readAsArrayBuffer(file);
+});
+window.onload = cargarTablas;
+</script>
+</body>
+</html>
